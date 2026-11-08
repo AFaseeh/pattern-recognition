@@ -2,6 +2,7 @@ import numpy as np
 from typing import Callable, Optional
 from numpy.linalg import det, inv
 import copy
+from KDEstimator import KDEstimator
 
 class BayesClassifier():
     def __init__(self, mode:str='QDA', *, kde_config=None, density=None, estimate_params=None):
@@ -51,22 +52,25 @@ class BayesClassifier():
             x_train_given_class = x_train[y_train == label]
             self.priors[k] = x_train_given_class.shape[0] / x_train.shape[0]
             # TODO 1: Fit the KDE on the class data
+            self.kde_list[k].fit(x_train_given_class)
             
 
     # fit using Gaussian Mixture Models
     def fit_gmm(self, x_train: np.ndarray, y_train: np.ndarray):
         # TODO 6: Raise a NotImplementedError since Gaussian Mixture Models will still be covered in the future
-        pass    
+        raise NotImplementedError
     
     # fit using custom density
     def fit_custom_density(self, x_train: np.ndarray, y_train: np.ndarray):
+        self.density_params_list = []
         for k, label in enumerate(self.labels):
             x_train_given_class = x_train[y_train == label]
             self.priors[k] = x_train_given_class.shape[0] / x_train.shape[0]
             assert self.estimate_params is not None, "Please provide an estimate_params function for your custom density."
             # TODO 3: Call self.estimate_params on x_train_given_class to estimate the parameters of the current class
-            estimated_params = None
+            estimated_params = self.estimate_params(x_train_given_class)
             # TODO 4: Store the estimated parameters in self.density_params_list
+            self.density_params_list.append(estimated_params)
             
 
     # fit using QDA, LDA and GNB
@@ -80,7 +84,7 @@ class BayesClassifier():
         for k, label in enumerate(self.labels):
             x_train_given_class = x_train[y_train == label]
             self.means[k] = np.mean(x_train_given_class, axis=0)
-            self.covs[k] = np.cov(x_train_given_class.T, bias=(self.mode != 'QDA'))
+            self.covs[k] = np.cov(x_train_given_class.T, bias=True)
             self.priors[k] = x_train_given_class.shape[0] / x_train.shape[0]
        
         # handle special cases
@@ -103,15 +107,15 @@ class BayesClassifier():
                 P = np.exp(-0.5 * ( (x - μ).T @ inv(Σ) @  (x- μ))) / scale
             case 'KDE':               
                 # TODO 2: Transform the data x using the kth fitted KDE instance
-                P = None
+                P = self.kde_list[k].P(x)
             case 'GMM':
                 P = None
                 # TODO 7: Raise a NotImplementedError since Gaussian Mixture Models will still be covered in the future
-                pass
+                raise NotImplementedError
             case 'Custom':
                 assert self.density is not None, "Please provide an density function for your custom density."
                 # TODO 5: Evaluate the custom density on x while passing the corresponding parameters from self.density_params_list
-                P = None
+                P = self.density(x, self.density_params_list[k])
         return P
             
     # Computes [P(X|C=0) P(X|C=1) ... P(X|C=K)]  
